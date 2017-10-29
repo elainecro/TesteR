@@ -1,0 +1,215 @@
+---
+title: "UnimedTest"
+author: "Elaine Cristina Rocha"
+date: "29 de outubro de 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Análise de Clientes de Corretora
+
+A Empresa X é uma corretora de valores que ajuda milhares de clientes a investir seu dinheiro de uma forma fácil e ágil. Seus produtos oferecem uma plataforma online e mobile de negociação de títulos públicos entre pessoas físicas e o programa do Tesouro Direto do governo.
+ 
+Todo dia milhares de pessoas se tornam nosso clientes e a variabilidade de suas características é impressionante. São pessoas com características parecidas ou pessoas totalmente diferente.
+
+
+```{r}
+start.time <- Sys.time()
+
+library(xlsx)
+
+#Realizando a leitura do dataset
+dataset <- read.xlsx("DataSet.xlsx",sheetIndex=1,header=TRUE, encoding="UTF-8")
+
+#Se houverem dados NA, realizo a limpeza
+dataset <- na.omit(dataset)
+
+head(dataset)
+```
+
+## Calculando idade e totalizando valores
+
+Como temos a coluna DATA_NASCIMENTO, vamos facilitar a avaliação dos dados convertendo a data para uma nova coluna IDADE.
+Estou entendendo que as colunas VALOR_01, VALOR_02, VALOR_03 e VALOR_04 representam investimentos de cada cliente, por isso para facilitar estou totalizando esses valores em VLR_TOTAL.
+
+```{r dataset}
+#Iniciando um cálculo de idade dos clientes
+dataAtual <- format(Sys.time(), "%Y-%m-%d")
+dataset$IDADE <- as.integer((as.Date(dataAtual) - as.Date(format(as.Date(dataset$DATA_NASCIMENTO), "%Y-%m-%d")))/365)
+
+#Criando uma coluna com total dos Valores de 01 a 04
+dataset$VLR_TOTAL <- (dataset$VALOR_01 + dataset$VALOR_02 + dataset$VALOR_03 + dataset$VALOR_04)
+
+head(dataset)
+```
+
+
+## Sumarizando os dados e plotando um boxplot para ter uma noção melhor do ambiente
+
+
+```{r}
+summary(dataset)
+
+quartil1 <- 914.3  #dado proveniente do summary
+media <- 29948.1 #dado proveniente do summary
+mediana <- 2714.3 #dado proveniente do summary
+quartil3 <- 18083.4 #dado proveniente do summary
+
+boxplot(dataset$VLR_TOTAL, col='blue')
+abline(h=mediana, col="green")
+abline(h=quartil1, col="red")
+abline(h=quartil3, col="red")
+```
+
+
+Observando o boxplot gerado podemos perceber que possuímos outliers, então é interessante fazer um corte no meu dataset para eliminar parte dos outliers.
+
+
+
+## Avaliando se temos uma distribuição normal nas colunas de valores
+
+```{r}
+shapiro.test(dataset$VALOR_01 + dataset$VALOR_02 + dataset$VALOR_03 + dataset$VALOR_04 + dataset$VLR_TOTAL)
+```
+
+
+Como temos um p-value menor que 0.05 então sabemos que não temos uma distribuição normal.
+
+## Teste de hipótese
+
+Sabendo que não temos uma distribuição normal, vamos avaliar se a idade possui relação com o valor total através do teste de Wilcoxon.
+
+```{r}
+wilcox.test(dataset$IDADE, dataset$VLR_TOTAL)
+```
+
+
+Obtendo um p-value muito próximo de zero podemos anular a hipótese de que a idade possui realação com o total do valor investido.
+
+
+## Vendo se existe alguma relação entre idade e valores total através de regressão linear
+
+```{r}
+linearModel <- lm(IDADE ~ VALOR_01 + VALOR_02 + VALOR_03 + VALOR_04 + VLR_TOTAL, dataset)
+linearModel
+
+summary(linearModel)
+```
+
+
+Através da sumarização do modelo linear acima vemos que os seus p-values são baixos mas somente o VALOR_02 parece realmente ter uma relação com as idades.
+
+```{r}
+cor1 <- cor(dataset$IDADE, dataset$VALOR_01)
+cor1
+cor2 <- cor(dataset$IDADE, dataset$VALOR_02)
+cor2
+cor3 <- cor(dataset$IDADE, dataset$VALOR_03)
+cor3
+cor4 <- cor(dataset$IDADE, dataset$VALOR_04)
+cor4
+```
+
+Mas avaliando as correlações separadas vemos que praticamente não há correlação entre os dados IDADE x VALORES.
+
+
+## Plotando em um gráfico de dispersão os dados de VALORES x IDADE
+
+```{r}
+plot(dataset$IDADE, dataset$VLR_TOTAL)
+abline(linearModel, col='blue', lwd=4)
+```
+
+Dessa forma é possível ver que temos outliers a partir de 1000000 (realmente sabemos como é difícil ser um milionário).
+
+
+#Vamos remover os outliers para melhor visualizar os dados
+
+Como mais acima já fizemos a sumarização dos dados identificamos os seus quartis, vamos recortar os dados excluindo registros acima do 3º Quartil.
+
+```{r}
+dataset1 <- subset(dataset, VLR_TOTAL <= quartil3)
+summary(dataset1)
+q1 <- 714.3
+mediana1 <- 1473.7
+q3 <- 3885.7
+hist(dataset1$VLR_TOTAL)
+abline(v=q1, col="red")
+abline(v=q3, col="red")
+abline(v=mediana1, col="blue" )
+
+
+boxplot(dataset1$VLR_TOTAL, col="green")
+abline(h=mediana1, col="purple", lwd=3)
+```
+
+Ainda assim sobrou bastante outlier. Nos dá a impressão que os clientes dessa corretora em sua maioria possuem menos de 5000 investidos.
+
+
+## Fazendo uma separação por gêneros para avaliação
+
+Vamos separar o dataset entre os gêneros feminino e masculino para avaliar a evolução do valor total investido.
+
+###Gênero Feminino
+```{r}
+datasetF <- subset(dataset, GENERO == "F")
+summary(datasetF)
+
+q1F <- 800
+medianaF <- 1885.7
+q3F <- 11828.6
+
+plot(datasetF$IDADE, datasetF$VLR_TOTAL)
+abline(h=q1F, col="blue")
+abline(h=medianaF, col="red")
+abline(h=q3F, col="blue")
+
+
+hist(datasetF$VLR_TOTAL)
+abline(v=q1F, col="blue")
+abline(v=medianaF, col="red")
+abline(v=q3F, col="blue")
+```
+
+
+
+###Gênero Masculino
+```{r}
+datasetM <- subset(dataset, GENERO == "M")
+summary(datasetM)
+
+q1M <- 1000
+medianaM <- 2857
+q3M <- 21143
+
+plot(datasetM$IDADE, datasetM$VLR_TOTAL)
+abline(h=q1M, col="blue")
+abline(h=medianaM, col="red")
+abline(h=q3M, col="blue")
+
+hist(datasetM$VLR_TOTAL)
+abline(v=q1M, col="blue")
+abline(v=medianaM, col="red")
+abline(v=q3M, col="blue")
+```
+
+
+
+## Tempo de execução
+
+```{r}
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+
+
+
+
+
+
